@@ -52,6 +52,40 @@ func TestHubRegisterSendsJoinNotice(t *testing.T) {
 	}
 }
 
+func TestHubBroadcastRoomIsolation(t *testing.T) {
+	hub := newHub()
+	go hub.run()
+
+	alice := newTestClient(hub, "alice", "general")
+	bob := newTestClient(hub, "bob", "general")
+	carol := newTestClient(hub, "carol", "other")
+
+	hub.register <- alice
+	recvMessage(t, alice)
+
+	hub.register <- bob
+	recvMessage(t, bob)
+	recvMessage(t, alice) // alice sees bob join
+
+	hub.register <- carol
+	recvMessage(t, carol)
+
+	out := Message{Type: MessageTypeMessage, Room: "general", Username: "alice", Body: "hello"}
+	data, err := out.Encode()
+	if err != nil {
+		t.Fatalf("encode: %v", err)
+	}
+	hub.broadcastCh <- outboundMessage{sender: alice, data: data}
+
+	msg := recvMessage(t, bob)
+	if msg.Type != MessageTypeMessage || msg.Body != "hello" {
+		t.Fatalf("bob should have received the message, got: %+v", msg)
+	}
+
+	expectNoMessage(t, alice)
+	expectNoMessage(t, carol)
+}
+
 func TestHubUnregisterSendsLeaveNoticeToOthers(t *testing.T) {
 	hub := newHub()
 	go hub.run()
