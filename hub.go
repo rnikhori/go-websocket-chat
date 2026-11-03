@@ -12,6 +12,7 @@ type outboundMessage struct {
 
 type Hub struct {
 	rooms       map[string]map[*Client]bool
+	history     map[string]*historyBuffer
 	register    chan *Client
 	unregister  chan *Client
 	broadcastCh chan outboundMessage
@@ -20,10 +21,20 @@ type Hub struct {
 func newHub() *Hub {
 	return &Hub{
 		rooms:       make(map[string]map[*Client]bool),
+		history:     make(map[string]*historyBuffer),
 		register:    make(chan *Client),
 		unregister:  make(chan *Client),
 		broadcastCh: make(chan outboundMessage),
 	}
+}
+
+func (h *Hub) historyFor(room string) *historyBuffer {
+	b, ok := h.history[room]
+	if !ok {
+		b = &historyBuffer{}
+		h.history[room] = b
+	}
+	return b
 }
 
 func (h *Hub) run() {
@@ -34,6 +45,7 @@ func (h *Hub) run() {
 		case c := <-h.unregister:
 			h.removeClient(c)
 		case m := <-h.broadcastCh:
+			h.historyFor(m.sender.room).add(m.data)
 			h.broadcastToRoom(m.sender.room, m.sender, m.data)
 		}
 	}
