@@ -61,3 +61,45 @@ func TestClientSendChatMessageRejectsOversizedBody(t *testing.T) {
 		t.Fatalf("expected an error message for an oversized body, got: %+v", msg)
 	}
 }
+
+func TestClientHandleIncomingRateLimitsPerClient(t *testing.T) {
+	hub := newHub()
+	go hub.run()
+
+	sender := newTestClient(hub, "sender", "general")
+	sender.limiter = NewTokenBucket(2, 0) // burst of 2, no refill
+	hub.register <- sender
+	drainJoinAndRoster(t, sender)
+
+	observer := newTestClient(hub, "observer", "general")
+	hub.register <- observer
+	drainJoinAndRoster(t, observer)
+	drainJoinAndRoster(t, sender) // sender sees observer join
+
+	frame := func(body string) []byte {
+		data, err := (Message{Type: MessageTypeMessage, Body: body}).Encode()
+		if err != nil {
+			t.Fatalf("encode: %v", err)
+		}
+		return data
+	}
+
+	sender.handleIncoming(frame("one"))
+	if msg := recvMessage(t, observer); msg.Body != "one" {
+		t.Fatalf("expected first message through, got: %+v", msg)
+	}
+
+	sender.handleIncoming(frame("two"))
+	if msg := recvMessage(t, observer); msg.Body != "two" {
+		t.Fatalf("expected second message through, got: %+v", msg)
+	}
+
+	// Burst capacity is now exhausted; the third message should be
+	// rejected with a private error instead of reaching observer.
+	sender.handleIncoming(frame("three"))
+	errMsg := recvMessage(t, sender)
+	if errMsg.Type != MessageTypeError {
+		t.Fatalf("expected a rate-limit error for sender, got: %+v", errMsg)
+	}
+	expectNoMessage(t, observer)
+}
