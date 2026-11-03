@@ -6,8 +6,9 @@ import (
 )
 
 type outboundMessage struct {
-	sender *Client
-	data   []byte
+	sender  *Client
+	data    []byte
+	persist bool
 }
 
 type Hub struct {
@@ -45,7 +46,9 @@ func (h *Hub) run() {
 		case c := <-h.unregister:
 			h.removeClient(c)
 		case m := <-h.broadcastCh:
-			h.historyFor(m.sender.room).add(m.data)
+			if m.persist {
+				h.historyFor(m.sender.room).add(m.data)
+			}
 			h.broadcastToRoom(m.sender.room, m.sender, m.data)
 		}
 	}

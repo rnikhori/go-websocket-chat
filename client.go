@@ -47,20 +47,44 @@ func (c *Client) readPump() {
 			continue
 		}
 
-		out := Message{
-			Type:      MessageTypeMessage,
-			Room:      c.room,
-			Username:  c.username,
-			Body:      in.Body,
-			Timestamp: time.Now().UTC().Format(time.RFC3339),
+		switch in.Type {
+		case MessageTypeTyping:
+			c.sendTyping()
+		default:
+			c.sendChatMessage(in.Body)
 		}
-		encoded, err := out.Encode()
-		if err != nil {
-			log.Printf("encode error: %v", err)
-			continue
-		}
-		c.hub.broadcastCh <- outboundMessage{sender: c, data: encoded}
 	}
+}
+
+func (c *Client) sendChatMessage(body string) {
+	out := Message{
+		Type:      MessageTypeMessage,
+		Room:      c.room,
+		Username:  c.username,
+		Body:      body,
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+	}
+	encoded, err := out.Encode()
+	if err != nil {
+		log.Printf("encode error: %v", err)
+		return
+	}
+	c.hub.broadcastCh <- outboundMessage{sender: c, data: encoded, persist: true}
+}
+
+func (c *Client) sendTyping() {
+	out := Message{
+		Type:      MessageTypeTyping,
+		Room:      c.room,
+		Username:  c.username,
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+	}
+	encoded, err := out.Encode()
+	if err != nil {
+		log.Printf("encode error: %v", err)
+		return
+	}
+	c.hub.broadcastCh <- outboundMessage{sender: c, data: encoded, persist: false}
 }
 
 func serveWs(hub *Hub) http.HandlerFunc {

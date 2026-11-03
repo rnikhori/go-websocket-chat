@@ -75,7 +75,7 @@ func TestHubBroadcastRoomIsolation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("encode: %v", err)
 	}
-	hub.broadcastCh <- outboundMessage{sender: alice, data: data}
+	hub.broadcastCh <- outboundMessage{sender: alice, data: data, persist: true}
 
 	msg := recvMessage(t, bob)
 	if msg.Type != MessageTypeMessage || msg.Body != "hello" {
@@ -100,7 +100,7 @@ func TestHubHistoryReplayOnJoin(t *testing.T) {
 		if err != nil {
 			t.Fatalf("encode: %v", err)
 		}
-		hub.broadcastCh <- outboundMessage{sender: alice, data: data}
+		hub.broadcastCh <- outboundMessage{sender: alice, data: data, persist: true}
 	}
 
 	bob := newTestClient(hub, "bob", "general")
