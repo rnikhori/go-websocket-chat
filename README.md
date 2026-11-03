@@ -111,3 +111,20 @@ Unrecognized incoming `type` values are treated as a chat message body.
 - `ratelimit.go` — the local `TokenBucket` rate limiter.
 - `static/index.html` — the browser client, embedded into the binary via
   `go:embed`.
+
+## Testing
+
+```sh
+go build ./...
+go vet ./...
+go test ./...
+go test -race ./...
+```
+
+The hub tests (`hub_test.go`) drive the `Hub` directly through its
+register/unregister/broadcast channels using plain `*Client` values with no
+real network connection, so they're fast and deterministic. They cover
+registration/join notices, room isolation, history replay ordering, roster
+updates, typing semantics, and that a slow client gets dropped instead of
+blocking the rest of the room. `ratelimit_test.go` exercises the token
+bucket with an injectable clock instead of real sleeps.
