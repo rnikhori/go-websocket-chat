@@ -150,6 +150,40 @@ func TestHubTypingIsNotPersistedAndExcludesSender(t *testing.T) {
 	}
 }
 
+func TestHubDropsSlowClientWithoutBlockingOthers(t *testing.T) {
+	hub := newHub()
+	go hub.run()
+
+	sender := newTestClient(hub, "sender", "general")
+	hub.register <- sender
+	recvMessage(t, sender) // sender's own join
+
+	victim := &Client{hub: hub, send: make(chan []byte, 1), username: "victim", room: "general"}
+	hub.register <- victim
+	recvMessage(t, sender) // sender sees victim join
+	recvMessage(t, victim) // victim's own join, drains its buffer to empty
+
+	observer := newTestClient(hub, "observer", "general")
+	hub.register <- observer
+	recvMessage(t, sender)   // sender sees observer join
+	recvMessage(t, observer) // observer's own join
+	// victim's 1-slot buffer is left full (holding observer's join notice)
+	// so the very first flood message below overflows it and triggers a drop.
+
+	for i := 0; i < 5; i++ {
+		out := Message{Type: MessageTypeMessage, Room: "general", Username: "sender", Body: "flood"}
+		data, err := out.Encode()
+		if err != nil {
+			t.Fatalf("encode: %v", err)
+		}
+		hub.broadcastCh <- outboundMessage{sender: sender, data: data, persist: true}
+		msg := recvMessage(t, observer)
+		if msg.Body != "flood" {
+			t.Fatalf("observer should keep receiving broadcasts, got: %+v", msg)
+		}
+	}
+}
+
 func TestHubUnregisterSendsLeaveNoticeToOthers(t *testing.T) {
 	hub := newHub()
 	go hub.run()
