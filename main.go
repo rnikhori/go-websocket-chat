@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"log"
 	"net/http"
 	"os"
@@ -170,18 +171,22 @@ func serveIndex(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
+	addr := flag.String("addr", ":8081", "HTTP listen address")
+	rateCapacity := flag.Float64("rate-burst", 5, "per-client rate limit burst capacity (messages)")
+	ratePerSec := flag.Float64("rate-per-sec", 1, "per-client sustained rate limit (messages/sec)")
+	flag.Parse()
+
 	hub := newHub()
 	go hub.run()
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", serveIndex)
-	mux.HandleFunc("/ws", serveWs(hub))
+	mux.HandleFunc("/ws", serveWs(hub, *rateCapacity, *ratePerSec))
 
-	addr := ":8081"
-	server := &http.Server{Addr: addr, Handler: mux}
+	server := &http.Server{Addr: *addr, Handler: mux}
 
 	go func() {
-		log.Printf("listening on %s", addr)
+		log.Printf("listening on %s", *addr)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("listen error: %v", err)
 		}

@@ -20,9 +20,6 @@ const (
 	pongWait   = 60 * time.Second
 	pingPeriod = (pongWait * 9) / 10
 
-	rateLimitCapacity = 5
-	rateLimitPerSec   = 1
-
 	maxMessageBytes    = 2000
 	maxIdentifierBytes = 32
 )
@@ -164,7 +161,7 @@ func (c *Client) sendError(body string) {
 	c.send <- encoded
 }
 
-func serveWs(hub *Hub) http.HandlerFunc {
+func serveWs(hub *Hub, rateCapacity, ratePerSec float64) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		conn, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
@@ -181,7 +178,7 @@ func serveWs(hub *Hub) http.HandlerFunc {
 			send:     make(chan []byte, sendBufferSize),
 			username: username,
 			room:     room,
-			limiter:  NewTokenBucket(rateLimitCapacity, rateLimitPerSec),
+			limiter:  NewTokenBucket(rateCapacity, ratePerSec),
 		}
 
 		hub.register <- client
