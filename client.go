@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
@@ -31,7 +32,24 @@ func (c *Client) readPump() {
 		if err != nil {
 			break
 		}
-		c.hub.broadcastCh <- outboundMessage{sender: c, data: data}
+
+		in, err := decodeMessage(data)
+		if err != nil {
+			log.Printf("discarding malformed message: %v", err)
+			continue
+		}
+
+		out := Message{
+			Type:      MessageTypeMessage,
+			Body:      in.Body,
+			Timestamp: time.Now().UTC().Format(time.RFC3339),
+		}
+		encoded, err := out.Encode()
+		if err != nil {
+			log.Printf("encode error: %v", err)
+			continue
+		}
+		c.hub.broadcastCh <- outboundMessage{sender: c, data: encoded}
 	}
 }
 
