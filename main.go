@@ -25,9 +25,11 @@ const indexHTML = `<!DOCTYPE html>
 	<h1>Go WebSocket Chat</h1>
 	<form id="setup">
 		<input id="username" type="text" autocomplete="off" placeholder="Your name">
+		<input id="room" type="text" autocomplete="off" placeholder="Room (default: general)">
 		<button type="submit">Join</button>
 	</form>
 	<div id="chat">
+		<h2 id="roomTitle"></h2>
 		<div id="log"></div>
 		<form id="form">
 			<input id="msg" type="text" autocomplete="off" placeholder="Type a message...">
@@ -37,8 +39,10 @@ const indexHTML = `<!DOCTYPE html>
 	<script>
 		const log = document.getElementById("log");
 		const chat = document.getElementById("chat");
+		const roomTitle = document.getElementById("roomTitle");
 		const setup = document.getElementById("setup");
 		const usernameInput = document.getElementById("username");
+		const roomInput = document.getElementById("room");
 		const form = document.getElementById("form");
 		const input = document.getElementById("msg");
 
@@ -61,9 +65,10 @@ const indexHTML = `<!DOCTYPE html>
 
 		let ws;
 
-		function connect(username) {
-			ws = new WebSocket("ws://" + location.host + "/ws?username=" + encodeURIComponent(username));
-			ws.onopen = () => append("[connected as " + username + "]");
+		function connect(username, room) {
+			const params = "?username=" + encodeURIComponent(username) + "&room=" + encodeURIComponent(room);
+			ws = new WebSocket("ws://" + location.host + "/ws" + params);
+			ws.onopen = () => append("[connected as " + username + " in " + room + "]");
 			ws.onclose = () => append("[disconnected]");
 			ws.onmessage = (event) => renderMessage(JSON.parse(event.data));
 		}
@@ -71,9 +76,11 @@ const indexHTML = `<!DOCTYPE html>
 		setup.addEventListener("submit", (e) => {
 			e.preventDefault();
 			if (!usernameInput.value) return;
+			const room = roomInput.value || "general";
+			roomTitle.textContent = "Room: " + room;
 			setup.style.display = "none";
 			chat.style.display = "block";
-			connect(usernameInput.value);
+			connect(usernameInput.value, room);
 		});
 
 		form.addEventListener("submit", (e) => {
