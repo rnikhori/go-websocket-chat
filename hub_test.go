@@ -119,6 +119,37 @@ func TestHubHistoryReplayOnJoin(t *testing.T) {
 	}
 }
 
+func TestHubTypingIsNotPersistedAndExcludesSender(t *testing.T) {
+	hub := newHub()
+	go hub.run()
+
+	alice := newTestClient(hub, "alice", "general")
+	bob := newTestClient(hub, "bob", "general")
+
+	hub.register <- alice
+	recvMessage(t, alice)
+	hub.register <- bob
+	recvMessage(t, bob)
+	recvMessage(t, alice) // alice sees bob join
+
+	typing := Message{Type: MessageTypeTyping, Room: "general", Username: "alice"}
+	data, err := typing.Encode()
+	if err != nil {
+		t.Fatalf("encode: %v", err)
+	}
+	hub.broadcastCh <- outboundMessage{sender: alice, data: data, persist: false}
+
+	msg := recvMessage(t, bob)
+	if msg.Type != MessageTypeTyping || msg.Username != "alice" {
+		t.Fatalf("expected typing notice for alice, got: %+v", msg)
+	}
+	expectNoMessage(t, alice)
+
+	if len(hub.historyFor("general").messages) != 0 {
+		t.Fatalf("typing events must not be persisted to history")
+	}
+}
+
 func TestHubUnregisterSendsLeaveNoticeToOthers(t *testing.T) {
 	hub := newHub()
 	go hub.run()
