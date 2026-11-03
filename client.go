@@ -98,24 +98,30 @@ func (c *Client) readPump() {
 		if err != nil {
 			break
 		}
+		c.handleIncoming(data)
+	}
+}
 
-		in, err := decodeMessage(data)
-		if err != nil {
-			log.Printf("discarding malformed message: %v", err)
-			continue
-		}
+// handleIncoming decodes, rate-limits, and dispatches a single raw frame
+// received from the client. Factored out of readPump so it can be tested
+// without a real connection.
+func (c *Client) handleIncoming(data []byte) {
+	in, err := decodeMessage(data)
+	if err != nil {
+		log.Printf("discarding malformed message: %v", err)
+		return
+	}
 
-		if !c.limiter.Allow() {
-			c.sendError("rate limit exceeded, slow down")
-			continue
-		}
+	if !c.limiter.Allow() {
+		c.sendError("rate limit exceeded, slow down")
+		return
+	}
 
-		switch in.Type {
-		case MessageTypeTyping:
-			c.sendTyping()
-		default:
-			c.sendChatMessage(in.Body)
-		}
+	switch in.Type {
+	case MessageTypeTyping:
+		c.sendTyping()
+	default:
+		c.sendChatMessage(in.Body)
 	}
 }
 
