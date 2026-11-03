@@ -197,9 +197,11 @@ func serveWs(hub *Hub, rateCapacity, ratePerSec float64) http.HandlerFunc {
 			limiter:  NewTokenBucket(rateCapacity, ratePerSec),
 		}
 
+		log.Printf("client connecting: username=%q room=%q remote=%s", username, room, r.RemoteAddr)
 		hub.register <- client
 
 		go client.writePump()
 		client.readPump()
+		log.Printf("client disconnected: username=%q room=%q remote=%s", username, room, r.RemoteAddr)
 	}
 }
