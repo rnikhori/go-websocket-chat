@@ -8,14 +8,16 @@ const (
 	MessageTypeLeave   = "leave"
 	MessageTypeTyping  = "typing"
 	MessageTypeError   = "error"
+	MessageTypeRoster  = "roster"
 )
 
 type Message struct {
-	Type      string `json:"type"`
-	Room      string `json:"room,omitempty"`
-	Username  string `json:"username,omitempty"`
-	Body      string `json:"body,omitempty"`
-	Timestamp string `json:"timestamp,omitempty"`
+	Type      string   `json:"type"`
+	Room      string   `json:"room,omitempty"`
+	Username  string   `json:"username,omitempty"`
+	Body      string   `json:"body,omitempty"`
+	Timestamp string   `json:"timestamp,omitempty"`
+	Users     []string `json:"users,omitempty"`
 }
 
 func (m Message) Encode() ([]byte, error) {
