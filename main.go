@@ -18,7 +18,7 @@ const indexHTML = `<!DOCTYPE html>
 	<meta charset="utf-8">
 	<title>Go WebSocket Chat</title>
 	<style>
-		body { font-family: sans-serif; max-width: 600px; margin: 2rem auto; }
+		body { font-family: sans-serif; max-width: 760px; margin: 2rem auto; }
 		#log { border: 1px solid #ccc; height: 300px; overflow-y: auto; padding: 0.5rem; margin-bottom: 0.5rem; }
 		#log div { margin-bottom: 0.25rem; }
 		#log div.system { color: #888; font-style: italic; }
@@ -26,6 +26,11 @@ const indexHTML = `<!DOCTYPE html>
 		#msg { flex: 1; }
 		#chat { display: none; }
 		#typing { height: 1.25rem; font-size: 0.9rem; color: #888; font-style: italic; }
+		#chatArea { display: flex; gap: 1rem; }
+		#chatArea > div:first-child { flex: 1; min-width: 0; }
+		#roster { width: 150px; border: 1px solid #ccc; padding: 0.5rem; height: 300px; overflow-y: auto; }
+		#roster h3 { margin: 0 0 0.5rem 0; font-size: 0.9rem; }
+		#roster ul { list-style: none; margin: 0; padding: 0; font-size: 0.9rem; }
 	</style>
 </head>
 <body>
@@ -37,23 +42,41 @@ const indexHTML = `<!DOCTYPE html>
 	</form>
 	<div id="chat">
 		<h2 id="roomTitle"></h2>
-		<div id="log"></div>
-		<div id="typing"></div>
-		<form id="form">
-			<input id="msg" type="text" autocomplete="off" placeholder="Type a message...">
-			<button type="submit">Send</button>
-		</form>
+		<div id="chatArea">
+			<div>
+				<div id="log"></div>
+				<div id="typing"></div>
+				<form id="form">
+					<input id="msg" type="text" autocomplete="off" placeholder="Type a message...">
+					<button type="submit">Send</button>
+				</form>
+			</div>
+			<div id="roster">
+				<h3>Online</h3>
+				<ul id="rosterList"></ul>
+			</div>
+		</div>
 	</div>
 	<script>
 		const log = document.getElementById("log");
 		const chat = document.getElementById("chat");
 		const roomTitle = document.getElementById("roomTitle");
 		const typingEl = document.getElementById("typing");
+		const rosterList = document.getElementById("rosterList");
 		const setup = document.getElementById("setup");
 		const usernameInput = document.getElementById("username");
 		const roomInput = document.getElementById("room");
 		const form = document.getElementById("form");
 		const input = document.getElementById("msg");
+
+		function renderRoster(users) {
+			rosterList.innerHTML = "";
+			for (const u of users) {
+				const li = document.createElement("li");
+				li.textContent = u;
+				rosterList.appendChild(li);
+			}
+		}
 
 		let typingTimer;
 
@@ -87,6 +110,9 @@ const indexHTML = `<!DOCTYPE html>
 					break;
 				case "error":
 					append("[" + msg.timestamp + "] ! " + msg.body, "system");
+					break;
+				case "roster":
+					renderRoster(msg.users || []);
 					break;
 				default:
 					append(JSON.stringify(msg), "system");
