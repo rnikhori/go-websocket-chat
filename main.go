@@ -1,8 +1,13 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
@@ -142,12 +147,28 @@ func main() {
 	hub := newHub()
 	go hub.run()
 
-	http.HandleFunc("/", serveIndex)
-	http.HandleFunc("/ws", serveWs(hub))
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", serveIndex)
+	mux.HandleFunc("/ws", serveWs(hub))
 
 	addr := ":8081"
-	log.Printf("listening on %s", addr)
-	if err := http.ListenAndServe(addr, nil); err != nil {
-		log.Fatal(err)
+	server := &http.Server{Addr: addr, Handler: mux}
+
+	go func() {
+		log.Printf("listening on %s", addr)
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("listen error: %v", err)
+		}
+	}()
+
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
+	<-stop
+
+	log.Println("shutting down")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := server.Shutdown(ctx); err != nil {
+		log.Printf("shutdown error: %v", err)
 	}
 }
