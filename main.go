@@ -80,6 +80,9 @@ const indexHTML = `<!DOCTYPE html>
 				case "typing":
 					showTyping(msg.username);
 					break;
+				case "error":
+					append("[" + msg.timestamp + "] ! " + msg.body, "system");
+					break;
 				default:
 					append(JSON.stringify(msg), "system");
 			}
