@@ -3,42 +3,40 @@ package main
 import (
 	"log"
 	"sync"
-
-	"github.com/gorilla/websocket"
 )
 
 type Hub struct {
 	mu      sync.Mutex
-	clients map[*websocket.Conn]bool
+	clients map[*Client]bool
 }
 
 func newHub() *Hub {
-	return &Hub{clients: make(map[*websocket.Conn]bool)}
+	return &Hub{clients: make(map[*Client]bool)}
 }
 
-func (h *Hub) add(conn *websocket.Conn) {
+func (h *Hub) add(c *Client) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	h.clients[conn] = true
+	h.clients[c] = true
 }
 
-func (h *Hub) remove(conn *websocket.Conn) {
+func (h *Hub) remove(c *Client) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	delete(h.clients, conn)
+	delete(h.clients, c)
 }
 
-func (h *Hub) broadcast(sender *websocket.Conn, messageType int, data []byte) {
+func (h *Hub) broadcast(sender *Client, messageType int, data []byte) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	for conn := range h.clients {
-		if conn == sender {
+	for c := range h.clients {
+		if c == sender {
 			continue
 		}
-		if err := conn.WriteMessage(messageType, data); err != nil {
+		if err := c.conn.WriteMessage(messageType, data); err != nil {
 			log.Printf("write error: %v", err)
-			conn.Close()
-			delete(h.clients, conn)
+			c.conn.Close()
+			delete(h.clients, c)
 		}
 	}
 }

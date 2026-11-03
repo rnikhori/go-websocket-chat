@@ -3,7 +3,14 @@ package main
 import (
 	"log"
 	"net/http"
+
+	"github.com/gorilla/websocket"
 )
+
+type Client struct {
+	hub  *Hub
+	conn *websocket.Conn
+}
 
 func serveWs(hub *Hub) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -14,15 +21,17 @@ func serveWs(hub *Hub) http.HandlerFunc {
 		}
 		defer conn.Close()
 
-		hub.add(conn)
-		defer hub.remove(conn)
+		client := &Client{hub: hub, conn: conn}
+
+		hub.add(client)
+		defer hub.remove(client)
 
 		for {
 			messageType, data, err := conn.ReadMessage()
 			if err != nil {
 				break
 			}
-			hub.broadcast(conn, messageType, data)
+			hub.broadcast(client, messageType, data)
 		}
 	}
 }
