@@ -8,12 +8,16 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-const sendBufferSize = 16
+const (
+	sendBufferSize  = 16
+	defaultUsername = "anonymous"
+)
 
 type Client struct {
-	hub  *Hub
-	conn *websocket.Conn
-	send chan []byte
+	hub      *Hub
+	conn     *websocket.Conn
+	send     chan []byte
+	username string
 }
 
 func (c *Client) writePump() {
@@ -41,6 +45,7 @@ func (c *Client) readPump() {
 
 		out := Message{
 			Type:      MessageTypeMessage,
+			Username:  c.username,
 			Body:      in.Body,
 			Timestamp: time.Now().UTC().Format(time.RFC3339),
 		}
@@ -61,7 +66,12 @@ func serveWs(hub *Hub) http.HandlerFunc {
 			return
 		}
 
-		client := &Client{hub: hub, conn: conn, send: make(chan []byte, sendBufferSize)}
+		username := r.URL.Query().Get("username")
+		if username == "" {
+			username = defaultUsername
+		}
+
+		client := &Client{hub: hub, conn: conn, send: make(chan []byte, sendBufferSize), username: username}
 
 		hub.register <- client
 
