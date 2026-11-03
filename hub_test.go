@@ -230,6 +230,36 @@ func TestHubDropsSlowClientWithoutBlockingOthers(t *testing.T) {
 	}
 }
 
+func TestHubRejectsClientWhenRoomIsFull(t *testing.T) {
+	hub := newHub()
+	hub.roomLimit = 2 // call registerClient directly: no run() goroutine needed
+
+	a := newTestClient(hub, "a", "general")
+	b := newTestClient(hub, "b", "general")
+	c := newTestClient(hub, "c", "general")
+
+	hub.registerClient(a)
+	hub.registerClient(b)
+	hub.registerClient(c) // room already has 2 members, should be rejected
+
+	room := hub.rooms["general"]
+	if len(room) != 2 {
+		t.Fatalf("expected room to stay at 2 members, got %d", len(room))
+	}
+	if _, ok := room[c]; ok {
+		t.Fatal("rejected client should not have been added to the room")
+	}
+
+	msg := recvMessage(t, c)
+	if msg.Type != MessageTypeError {
+		t.Fatalf("expected an error message for the rejected client, got: %+v", msg)
+	}
+
+	if _, ok := <-c.send; ok {
+		t.Fatal("expected c's send channel to be closed after rejection")
+	}
+}
+
 func TestHubUnregisterSendsLeaveNoticeToOthers(t *testing.T) {
 	hub := newHub()
 	go hub.run()

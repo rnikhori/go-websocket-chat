@@ -5,6 +5,8 @@ import (
 	"time"
 )
 
+const maxClientsPerRoom = 100
+
 type outboundMessage struct {
 	sender  *Client
 	data    []byte
@@ -17,6 +19,7 @@ type Hub struct {
 	register    chan *Client
 	unregister  chan *Client
 	broadcastCh chan outboundMessage
+	roomLimit   int
 }
 
 func newHub() *Hub {
@@ -26,6 +29,7 @@ func newHub() *Hub {
 		register:    make(chan *Client),
 		unregister:  make(chan *Client),
 		broadcastCh: make(chan outboundMessage),
+		roomLimit:   maxClientsPerRoom,
 	}
 }
 
@@ -60,6 +64,11 @@ func (h *Hub) registerClient(c *Client) {
 		room = make(map[*Client]bool)
 		h.rooms[c.room] = room
 	}
+
+	if len(room) >= h.roomLimit {
+		h.rejectClient(c)
+		return
+	}
 	room[c] = true
 
 	for _, data := range h.historyFor(c.room).messages {
@@ -79,6 +88,24 @@ func (h *Hub) registerClient(c *Client) {
 	}
 	h.broadcastToAll(c.room, encoded)
 	h.broadcastRoster(c.room)
+}
+
+// rejectClient refuses a connection that arrived once its room was already
+// at maxClientsPerRoom. The client was never added to the room, so it is
+// not counted and removeClient will no-op for it later.
+func (h *Hub) rejectClient(c *Client) {
+	log.Printf("rejecting client %s: room %s is full", c.username, c.room)
+	notice := Message{
+		Type:      MessageTypeError,
+		Room:      c.room,
+		Body:      "room is full, try again later",
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+	}
+	encoded, err := notice.Encode()
+	if err == nil {
+		c.send <- encoded
+	}
+	close(c.send)
 }
 
 func (h *Hub) removeClient(c *Client) {
