@@ -39,15 +39,25 @@ const indexHTML = `<!DOCTYPE html>
 			log.scrollTop = log.scrollHeight;
 		}
 
+		function renderMessage(msg) {
+			switch (msg.type) {
+				case "message":
+					append("[" + msg.timestamp + "] " + msg.body);
+					break;
+				default:
+					append(JSON.stringify(msg));
+			}
+		}
+
 		const ws = new WebSocket("ws://" + location.host + "/ws");
 		ws.onopen = () => append("[connected]");
 		ws.onclose = () => append("[disconnected]");
-		ws.onmessage = (event) => append(event.data);
+		ws.onmessage = (event) => renderMessage(JSON.parse(event.data));
 
 		form.addEventListener("submit", (e) => {
 			e.preventDefault();
 			if (!input.value) return;
-			ws.send(input.value);
+			ws.send(JSON.stringify({ type: "message", body: input.value }));
 			append("me: " + input.value);
 			input.value = "";
 		});
