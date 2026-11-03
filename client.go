@@ -23,8 +23,20 @@ const (
 	rateLimitCapacity = 5
 	rateLimitPerSec   = 1
 
-	maxMessageBytes = 2000
+	maxMessageBytes    = 2000
+	maxIdentifierBytes = 32
 )
+
+func sanitizeIdentifier(value, fallback string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return fallback
+	}
+	if len(value) > maxIdentifierBytes {
+		value = value[:maxIdentifierBytes]
+	}
+	return value
+}
 
 type Client struct {
 	hub      *Hub
@@ -160,14 +172,8 @@ func serveWs(hub *Hub) http.HandlerFunc {
 			return
 		}
 
-		username := r.URL.Query().Get("username")
-		if username == "" {
-			username = defaultUsername
-		}
-		room := r.URL.Query().Get("room")
-		if room == "" {
-			room = defaultRoom
-		}
+		username := sanitizeIdentifier(r.URL.Query().Get("username"), defaultUsername)
+		room := sanitizeIdentifier(r.URL.Query().Get("room"), defaultRoom)
 
 		client := &Client{
 			hub:      hub,
