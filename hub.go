@@ -71,9 +71,24 @@ func (h *Hub) removeClient(c *Client) {
 	}
 	delete(room, c)
 	close(c.send)
+
 	if len(room) == 0 {
 		delete(h.rooms, c.room)
+		return
 	}
+
+	notice := Message{
+		Type:      MessageTypeLeave,
+		Room:      c.room,
+		Username:  c.username,
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+	}
+	encoded, err := notice.Encode()
+	if err != nil {
+		log.Printf("encode error: %v", err)
+		return
+	}
+	h.broadcastToAll(c.room, encoded)
 }
 
 func (h *Hub) broadcastToRoom(roomName string, sender *Client, data []byte) {
