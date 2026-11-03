@@ -86,6 +86,39 @@ func TestHubBroadcastRoomIsolation(t *testing.T) {
 	expectNoMessage(t, carol)
 }
 
+func TestHubHistoryReplayOnJoin(t *testing.T) {
+	hub := newHub()
+	go hub.run()
+
+	alice := newTestClient(hub, "alice", "general")
+	hub.register <- alice
+	recvMessage(t, alice)
+
+	for _, body := range []string{"first", "second", "third"} {
+		out := Message{Type: MessageTypeMessage, Room: "general", Username: "alice", Body: body}
+		data, err := out.Encode()
+		if err != nil {
+			t.Fatalf("encode: %v", err)
+		}
+		hub.broadcastCh <- outboundMessage{sender: alice, data: data}
+	}
+
+	bob := newTestClient(hub, "bob", "general")
+	hub.register <- bob
+
+	for _, want := range []string{"first", "second", "third"} {
+		msg := recvMessage(t, bob)
+		if msg.Body != want {
+			t.Fatalf("expected history message %q, got: %+v", want, msg)
+		}
+	}
+
+	joinNotice := recvMessage(t, bob)
+	if joinNotice.Type != MessageTypeJoin {
+		t.Fatalf("expected join notice after history, got: %+v", joinNotice)
+	}
+}
+
 func TestHubUnregisterSendsLeaveNoticeToOthers(t *testing.T) {
 	hub := newHub()
 	go hub.run()
