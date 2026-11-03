@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -21,6 +22,8 @@ const (
 
 	rateLimitCapacity = 5
 	rateLimitPerSec   = 1
+
+	maxMessageBytes = 2000
 )
 
 type Client struct {
@@ -95,6 +98,15 @@ func (c *Client) readPump() {
 }
 
 func (c *Client) sendChatMessage(body string) {
+	body = strings.TrimSpace(body)
+	if body == "" {
+		return
+	}
+	if len(body) > maxMessageBytes {
+		c.sendError("message too long, max 2000 bytes")
+		return
+	}
+
 	out := Message{
 		Type:      MessageTypeMessage,
 		Room:      c.room,
