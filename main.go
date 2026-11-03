@@ -20,6 +20,7 @@ const indexHTML = `<!DOCTYPE html>
 		form { display: flex; gap: 0.5rem; }
 		#msg { flex: 1; }
 		#chat { display: none; }
+		#typing { height: 1.25rem; font-size: 0.9rem; color: #888; font-style: italic; }
 	</style>
 </head>
 <body>
@@ -32,6 +33,7 @@ const indexHTML = `<!DOCTYPE html>
 	<div id="chat">
 		<h2 id="roomTitle"></h2>
 		<div id="log"></div>
+		<div id="typing"></div>
 		<form id="form">
 			<input id="msg" type="text" autocomplete="off" placeholder="Type a message...">
 			<button type="submit">Send</button>
@@ -41,11 +43,20 @@ const indexHTML = `<!DOCTYPE html>
 		const log = document.getElementById("log");
 		const chat = document.getElementById("chat");
 		const roomTitle = document.getElementById("roomTitle");
+		const typingEl = document.getElementById("typing");
 		const setup = document.getElementById("setup");
 		const usernameInput = document.getElementById("username");
 		const roomInput = document.getElementById("room");
 		const form = document.getElementById("form");
 		const input = document.getElementById("msg");
+
+		let typingTimer;
+
+		function showTyping(username) {
+			typingEl.textContent = username + " is typing...";
+			clearTimeout(typingTimer);
+			typingTimer = setTimeout(() => { typingEl.textContent = ""; }, 3000);
+		}
 
 		function append(text, className) {
 			const div = document.createElement("div");
@@ -65,6 +76,9 @@ const indexHTML = `<!DOCTYPE html>
 					break;
 				case "leave":
 					append("[" + msg.timestamp + "] * " + msg.username + " left " + msg.room, "system");
+					break;
+				case "typing":
+					showTyping(msg.username);
 					break;
 				default:
 					append(JSON.stringify(msg), "system");
@@ -96,6 +110,14 @@ const indexHTML = `<!DOCTYPE html>
 			if (!input.value) return;
 			ws.send(JSON.stringify({ type: "message", body: input.value }));
 			input.value = "";
+		});
+
+		let lastTypingSent = 0;
+		input.addEventListener("input", () => {
+			const now = Date.now();
+			if (now - lastTypingSent < 1500) return;
+			lastTypingSent = now;
+			ws.send(JSON.stringify({ type: "typing" }));
 		});
 	</script>
 </body>
