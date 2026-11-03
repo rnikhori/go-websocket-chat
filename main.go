@@ -18,17 +18,27 @@ const indexHTML = `<!DOCTYPE html>
 		#log div { margin-bottom: 0.25rem; }
 		form { display: flex; gap: 0.5rem; }
 		#msg { flex: 1; }
+		#chat { display: none; }
 	</style>
 </head>
 <body>
 	<h1>Go WebSocket Chat</h1>
-	<div id="log"></div>
-	<form id="form">
-		<input id="msg" type="text" autocomplete="off" placeholder="Type a message...">
-		<button type="submit">Send</button>
+	<form id="setup">
+		<input id="username" type="text" autocomplete="off" placeholder="Your name">
+		<button type="submit">Join</button>
 	</form>
+	<div id="chat">
+		<div id="log"></div>
+		<form id="form">
+			<input id="msg" type="text" autocomplete="off" placeholder="Type a message...">
+			<button type="submit">Send</button>
+		</form>
+	</div>
 	<script>
 		const log = document.getElementById("log");
+		const chat = document.getElementById("chat");
+		const setup = document.getElementById("setup");
+		const usernameInput = document.getElementById("username");
 		const form = document.getElementById("form");
 		const input = document.getElementById("msg");
 
@@ -42,23 +52,34 @@ const indexHTML = `<!DOCTYPE html>
 		function renderMessage(msg) {
 			switch (msg.type) {
 				case "message":
-					append("[" + msg.timestamp + "] " + msg.body);
+					append("[" + msg.timestamp + "] " + msg.username + ": " + msg.body);
 					break;
 				default:
 					append(JSON.stringify(msg));
 			}
 		}
 
-		const ws = new WebSocket("ws://" + location.host + "/ws");
-		ws.onopen = () => append("[connected]");
-		ws.onclose = () => append("[disconnected]");
-		ws.onmessage = (event) => renderMessage(JSON.parse(event.data));
+		let ws;
+
+		function connect(username) {
+			ws = new WebSocket("ws://" + location.host + "/ws?username=" + encodeURIComponent(username));
+			ws.onopen = () => append("[connected as " + username + "]");
+			ws.onclose = () => append("[disconnected]");
+			ws.onmessage = (event) => renderMessage(JSON.parse(event.data));
+		}
+
+		setup.addEventListener("submit", (e) => {
+			e.preventDefault();
+			if (!usernameInput.value) return;
+			setup.style.display = "none";
+			chat.style.display = "block";
+			connect(usernameInput.value);
+		});
 
 		form.addEventListener("submit", (e) => {
 			e.preventDefault();
 			if (!input.value) return;
 			ws.send(JSON.stringify({ type: "message", body: input.value }));
-			append("me: " + input.value);
 			input.value = "";
 		});
 	</script>
