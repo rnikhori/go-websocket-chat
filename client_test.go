@@ -33,3 +33,31 @@ func TestSanitizeIdentifier(t *testing.T) {
 		t.Fatalf("expected identifier truncated to %d bytes, got %d", maxIdentifierBytes, len(got))
 	}
 }
+
+func TestClientSendChatMessageDropsEmptyBody(t *testing.T) {
+	hub := newHub()
+	go hub.run()
+
+	c := newTestClient(hub, "alice", "general")
+	hub.register <- c
+	drainJoinAndRoster(t, c) // own join notice + roster
+
+	c.sendChatMessage("   ")
+	expectNoMessage(t, c)
+}
+
+func TestClientSendChatMessageRejectsOversizedBody(t *testing.T) {
+	hub := newHub()
+	go hub.run()
+
+	c := newTestClient(hub, "alice", "general")
+	hub.register <- c
+	drainJoinAndRoster(t, c)
+
+	c.sendChatMessage(strings.Repeat("x", maxMessageBytes+1))
+
+	msg := recvMessage(t, c)
+	if msg.Type != MessageTypeError {
+		t.Fatalf("expected an error message for an oversized body, got: %+v", msg)
+	}
+}
