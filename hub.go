@@ -119,7 +119,7 @@ func (h *Hub) broadcastToRoom(roomName string, sender *Client, data []byte) {
 		if c == sender {
 			continue
 		}
-		c.send <- data
+		h.send(room, roomName, c, data)
 	}
 }
 
@@ -129,6 +129,22 @@ func (h *Hub) broadcastToAll(roomName string, data []byte) {
 		return
 	}
 	for c := range room {
-		c.send <- data
+		h.send(room, roomName, c, data)
+	}
+}
+
+// send delivers data to c's buffer without blocking the hub loop. If the
+// client's buffer is full it is too slow to keep up and gets dropped
+// instead of stalling every other client in the room.
+func (h *Hub) send(room map[*Client]bool, roomName string, c *Client, data []byte) {
+	select {
+	case c.send <- data:
+	default:
+		log.Printf("dropping slow client %s in room %s", c.username, roomName)
+		delete(room, c)
+		close(c.send)
+		if len(room) == 0 {
+			delete(h.rooms, roomName)
+		}
 	}
 }
