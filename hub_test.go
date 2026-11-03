@@ -30,6 +30,19 @@ func recvMessage(t *testing.T, c *Client) Message {
 	}
 }
 
+// drainJoinAndRoster reads the join/leave notice a registration or
+// disconnect always emits, immediately followed by the roster update that
+// accompanies it, and returns the first (join/leave) message.
+func drainJoinAndRoster(t *testing.T, c *Client) Message {
+	t.Helper()
+	notice := recvMessage(t, c)
+	roster := recvMessage(t, c)
+	if roster.Type != MessageTypeRoster {
+		t.Fatalf("expected a roster update right after %s, got: %+v", notice.Type, roster)
+	}
+	return notice
+}
+
 func expectNoMessage(t *testing.T, c *Client) {
 	t.Helper()
 	select {
@@ -46,7 +59,7 @@ func TestHubRegisterSendsJoinNotice(t *testing.T) {
 	alice := newTestClient(hub, "alice", "general")
 	hub.register <- alice
 
-	msg := recvMessage(t, alice)
+	msg := drainJoinAndRoster(t, alice)
 	if msg.Type != MessageTypeJoin || msg.Username != "alice" || msg.Room != "general" {
 		t.Fatalf("unexpected join notice: %+v", msg)
 	}
@@ -61,14 +74,14 @@ func TestHubBroadcastRoomIsolation(t *testing.T) {
 	carol := newTestClient(hub, "carol", "other")
 
 	hub.register <- alice
-	recvMessage(t, alice)
+	drainJoinAndRoster(t, alice)
 
 	hub.register <- bob
-	recvMessage(t, bob)
-	recvMessage(t, alice) // alice sees bob join
+	drainJoinAndRoster(t, bob)
+	drainJoinAndRoster(t, alice) // alice sees bob join
 
 	hub.register <- carol
-	recvMessage(t, carol)
+	drainJoinAndRoster(t, carol)
 
 	out := Message{Type: MessageTypeMessage, Room: "general", Username: "alice", Body: "hello"}
 	data, err := out.Encode()
@@ -92,7 +105,7 @@ func TestHubHistoryReplayOnJoin(t *testing.T) {
 
 	alice := newTestClient(hub, "alice", "general")
 	hub.register <- alice
-	recvMessage(t, alice)
+	drainJoinAndRoster(t, alice)
 
 	for _, body := range []string{"first", "second", "third"} {
 		out := Message{Type: MessageTypeMessage, Room: "general", Username: "alice", Body: body}
@@ -119,6 +132,39 @@ func TestHubHistoryReplayOnJoin(t *testing.T) {
 	}
 }
 
+func TestHubRosterUpdatesOnJoinAndLeave(t *testing.T) {
+	hub := newHub()
+	go hub.run()
+
+	alice := newTestClient(hub, "alice", "general")
+	hub.register <- alice
+	recvMessage(t, alice) // join
+
+	roster := recvMessage(t, alice)
+	if roster.Type != MessageTypeRoster || len(roster.Users) != 1 || roster.Users[0] != "alice" {
+		t.Fatalf("expected roster of just alice, got: %+v", roster)
+	}
+
+	bob := newTestClient(hub, "bob", "general")
+	hub.register <- bob
+	recvMessage(t, bob)   // bob's own join
+	recvMessage(t, bob)   // bob's own roster
+	recvMessage(t, alice) // alice sees bob join
+
+	roster = recvMessage(t, alice)
+	if roster.Type != MessageTypeRoster || len(roster.Users) != 2 {
+		t.Fatalf("expected roster of 2 users after bob joins, got: %+v", roster)
+	}
+
+	hub.unregister <- bob
+	recvMessage(t, alice) // alice sees bob leave
+
+	roster = recvMessage(t, alice)
+	if roster.Type != MessageTypeRoster || len(roster.Users) != 1 || roster.Users[0] != "alice" {
+		t.Fatalf("expected roster of just alice again after bob leaves, got: %+v", roster)
+	}
+}
+
 func TestHubTypingIsNotPersistedAndExcludesSender(t *testing.T) {
 	hub := newHub()
 	go hub.run()
@@ -127,10 +173,10 @@ func TestHubTypingIsNotPersistedAndExcludesSender(t *testing.T) {
 	bob := newTestClient(hub, "bob", "general")
 
 	hub.register <- alice
-	recvMessage(t, alice)
+	drainJoinAndRoster(t, alice)
 	hub.register <- bob
-	recvMessage(t, bob)
-	recvMessage(t, alice) // alice sees bob join
+	drainJoinAndRoster(t, bob)
+	drainJoinAndRoster(t, alice) // alice sees bob join
 
 	typing := Message{Type: MessageTypeTyping, Room: "general", Username: "alice"}
 	data, err := typing.Encode()
@@ -156,19 +202,19 @@ func TestHubDropsSlowClientWithoutBlockingOthers(t *testing.T) {
 
 	sender := newTestClient(hub, "sender", "general")
 	hub.register <- sender
-	recvMessage(t, sender) // sender's own join
+	drainJoinAndRoster(t, sender) // sender's own join
 
-	victim := &Client{hub: hub, send: make(chan []byte, 1), username: "victim", room: "general"}
+	// victim's buffer holds exactly the 4 setup messages it will receive
+	// from its own join/roster and observer's join/roster below; it is
+	// never drained, so the very first flood message overflows it.
+	victim := &Client{hub: hub, send: make(chan []byte, 4), username: "victim", room: "general"}
 	hub.register <- victim
-	recvMessage(t, sender) // sender sees victim join
-	recvMessage(t, victim) // victim's own join, drains its buffer to empty
+	drainJoinAndRoster(t, sender) // sender sees victim join
 
 	observer := newTestClient(hub, "observer", "general")
 	hub.register <- observer
-	recvMessage(t, sender)   // sender sees observer join
-	recvMessage(t, observer) // observer's own join
-	// victim's 1-slot buffer is left full (holding observer's join notice)
-	// so the very first flood message below overflows it and triggers a drop.
+	drainJoinAndRoster(t, sender)   // sender sees observer join
+	drainJoinAndRoster(t, observer) // observer's own join
 
 	for i := 0; i < 5; i++ {
 		out := Message{Type: MessageTypeMessage, Room: "general", Username: "sender", Body: "flood"}
@@ -192,11 +238,11 @@ func TestHubUnregisterSendsLeaveNoticeToOthers(t *testing.T) {
 	bob := newTestClient(hub, "bob", "general")
 
 	hub.register <- alice
-	recvMessage(t, alice) // alice's own join notice
+	drainJoinAndRoster(t, alice) // alice's own join notice
 
 	hub.register <- bob
-	recvMessage(t, bob)   // bob's own join notice
-	recvMessage(t, alice) // alice sees bob join
+	drainJoinAndRoster(t, bob)   // bob's own join notice
+	drainJoinAndRoster(t, alice) // alice sees bob join
 
 	hub.unregister <- bob
 

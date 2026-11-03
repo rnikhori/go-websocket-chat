@@ -78,6 +78,7 @@ func (h *Hub) registerClient(c *Client) {
 		return
 	}
 	h.broadcastToAll(c.room, encoded)
+	h.broadcastRoster(c.room)
 }
 
 func (h *Hub) removeClient(c *Client) {
@@ -108,6 +109,30 @@ func (h *Hub) removeClient(c *Client) {
 		return
 	}
 	h.broadcastToAll(c.room, encoded)
+	h.broadcastRoster(c.room)
+}
+
+func (h *Hub) broadcastRoster(roomName string) {
+	room, ok := h.rooms[roomName]
+	if !ok {
+		return
+	}
+	users := make([]string, 0, len(room))
+	for c := range room {
+		users = append(users, c.username)
+	}
+
+	roster := Message{
+		Type:  MessageTypeRoster,
+		Room:  roomName,
+		Users: users,
+	}
+	encoded, err := roster.Encode()
+	if err != nil {
+		log.Printf("encode error: %v", err)
+		return
+	}
+	h.broadcastToAll(roomName, encoded)
 }
 
 func (h *Hub) broadcastToRoom(roomName string, sender *Client, data []byte) {
