@@ -16,6 +16,7 @@ const indexHTML = `<!DOCTYPE html>
 		body { font-family: sans-serif; max-width: 600px; margin: 2rem auto; }
 		#log { border: 1px solid #ccc; height: 300px; overflow-y: auto; padding: 0.5rem; margin-bottom: 0.5rem; }
 		#log div { margin-bottom: 0.25rem; }
+		#log div.system { color: #888; font-style: italic; }
 		form { display: flex; gap: 0.5rem; }
 		#msg { flex: 1; }
 		#chat { display: none; }
@@ -46,8 +47,9 @@ const indexHTML = `<!DOCTYPE html>
 		const form = document.getElementById("form");
 		const input = document.getElementById("msg");
 
-		function append(text) {
+		function append(text, className) {
 			const div = document.createElement("div");
+			if (className) div.className = className;
 			div.textContent = text;
 			log.appendChild(div);
 			log.scrollTop = log.scrollHeight;
@@ -58,8 +60,14 @@ const indexHTML = `<!DOCTYPE html>
 				case "message":
 					append("[" + msg.timestamp + "] " + msg.username + ": " + msg.body);
 					break;
+				case "join":
+					append("[" + msg.timestamp + "] * " + msg.username + " joined " + msg.room, "system");
+					break;
+				case "leave":
+					append("[" + msg.timestamp + "] * " + msg.username + " left " + msg.room, "system");
+					break;
 				default:
-					append(JSON.stringify(msg));
+					append(JSON.stringify(msg), "system");
 			}
 		}
 
