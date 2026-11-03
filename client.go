@@ -7,9 +7,32 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+const sendBufferSize = 16
+
 type Client struct {
 	hub  *Hub
 	conn *websocket.Conn
+	send chan []byte
+}
+
+func (c *Client) writePump() {
+	defer c.conn.Close()
+	for msg := range c.send {
+		if err := c.conn.WriteMessage(websocket.TextMessage, msg); err != nil {
+			return
+		}
+	}
+}
+
+func (c *Client) readPump() {
+	defer func() { c.hub.unregister <- c }()
+	for {
+		_, data, err := c.conn.ReadMessage()
+		if err != nil {
+			break
+		}
+		c.hub.broadcastCh <- outboundMessage{sender: c, data: data}
+	}
 }
 
 func serveWs(hub *Hub) http.HandlerFunc {
@@ -19,19 +42,12 @@ func serveWs(hub *Hub) http.HandlerFunc {
 			log.Printf("upgrade error: %v", err)
 			return
 		}
-		defer conn.Close()
 
-		client := &Client{hub: hub, conn: conn}
+		client := &Client{hub: hub, conn: conn, send: make(chan []byte, sendBufferSize)}
 
 		hub.register <- client
-		defer func() { hub.unregister <- client }()
 
-		for {
-			messageType, data, err := conn.ReadMessage()
-			if err != nil {
-				break
-			}
-			hub.broadcastCh <- outboundMessage{sender: client, messageType: messageType, data: data}
-		}
+		go client.writePump()
+		client.readPump()
 	}
 }

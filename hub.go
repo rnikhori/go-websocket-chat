@@ -1,11 +1,8 @@
 package main
 
-import "log"
-
 type outboundMessage struct {
-	sender      *Client
-	messageType int
-	data        []byte
+	sender *Client
+	data   []byte
 }
 
 type Hub struct {
@@ -32,17 +29,14 @@ func (h *Hub) run() {
 		case c := <-h.unregister:
 			if _, ok := h.clients[c]; ok {
 				delete(h.clients, c)
+				close(c.send)
 			}
 		case m := <-h.broadcastCh:
 			for c := range h.clients {
 				if c == m.sender {
 					continue
 				}
-				if err := c.conn.WriteMessage(m.messageType, m.data); err != nil {
-					log.Printf("write error: %v", err)
-					c.conn.Close()
-					delete(h.clients, c)
-				}
+				c.send <- m.data
 			}
 		}
 	}
