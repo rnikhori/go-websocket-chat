@@ -18,6 +18,9 @@ const (
 	writeWait  = 10 * time.Second
 	pongWait   = 60 * time.Second
 	pingPeriod = (pongWait * 9) / 10
+
+	rateLimitCapacity = 5
+	rateLimitPerSec   = 1
 )
 
 type Client struct {
@@ -26,6 +29,7 @@ type Client struct {
 	send     chan []byte
 	username string
 	room     string
+	limiter  *TokenBucket
 }
 
 func (c *Client) writePump() {
@@ -76,6 +80,11 @@ func (c *Client) readPump() {
 			continue
 		}
 
+		if !c.limiter.Allow() {
+			c.sendError("rate limit exceeded, slow down")
+			continue
+		}
+
 		switch in.Type {
 		case MessageTypeTyping:
 			c.sendTyping()
@@ -116,6 +125,21 @@ func (c *Client) sendTyping() {
 	c.hub.broadcastCh <- outboundMessage{sender: c, data: encoded, persist: false}
 }
 
+func (c *Client) sendError(body string) {
+	out := Message{
+		Type:      MessageTypeError,
+		Room:      c.room,
+		Body:      body,
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+	}
+	encoded, err := out.Encode()
+	if err != nil {
+		log.Printf("encode error: %v", err)
+		return
+	}
+	c.send <- encoded
+}
+
 func serveWs(hub *Hub) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		conn, err := upgrader.Upgrade(w, r, nil)
@@ -139,6 +163,7 @@ func serveWs(hub *Hub) http.HandlerFunc {
 			send:     make(chan []byte, sendBufferSize),
 			username: username,
 			room:     room,
+			limiter:  NewTokenBucket(rateLimitCapacity, rateLimitPerSec),
 		}
 
 		hub.register <- client

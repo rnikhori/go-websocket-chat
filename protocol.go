@@ -7,6 +7,7 @@ const (
 	MessageTypeJoin    = "join"
 	MessageTypeLeave   = "leave"
 	MessageTypeTyping  = "typing"
+	MessageTypeError   = "error"
 )
 
 type Message struct {
