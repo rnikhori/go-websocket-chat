@@ -59,6 +59,10 @@ func (h *Hub) registerClient(c *Client) {
 	}
 	room[c] = true
 
+	for _, data := range h.historyFor(c.room).messages {
+		c.send <- data
+	}
+
 	notice := Message{
 		Type:      MessageTypeJoin,
 		Room:      c.room,

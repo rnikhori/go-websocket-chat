@@ -9,7 +9,9 @@ import (
 )
 
 const (
-	sendBufferSize  = 16
+	// sendBufferSize must comfortably hold a full history replay (historySize)
+	// plus a few live messages so registerClient never blocks the hub loop.
+	sendBufferSize  = historySize + 16
 	defaultUsername = "anonymous"
 	defaultRoom     = "general"
 )
