@@ -11,6 +11,7 @@ import (
 const (
 	sendBufferSize  = 16
 	defaultUsername = "anonymous"
+	defaultRoom     = "general"
 )
 
 type Client struct {
@@ -18,6 +19,7 @@ type Client struct {
 	conn     *websocket.Conn
 	send     chan []byte
 	username string
+	room     string
 }
 
 func (c *Client) writePump() {
@@ -45,6 +47,7 @@ func (c *Client) readPump() {
 
 		out := Message{
 			Type:      MessageTypeMessage,
+			Room:      c.room,
 			Username:  c.username,
 			Body:      in.Body,
 			Timestamp: time.Now().UTC().Format(time.RFC3339),
@@ -70,8 +73,18 @@ func serveWs(hub *Hub) http.HandlerFunc {
 		if username == "" {
 			username = defaultUsername
 		}
+		room := r.URL.Query().Get("room")
+		if room == "" {
+			room = defaultRoom
+		}
 
-		client := &Client{hub: hub, conn: conn, send: make(chan []byte, sendBufferSize), username: username}
+		client := &Client{
+			hub:      hub,
+			conn:     conn,
+			send:     make(chan []byte, sendBufferSize),
+			username: username,
+			room:     room,
+		}
 
 		hub.register <- client
 
