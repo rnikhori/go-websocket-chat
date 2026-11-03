@@ -23,15 +23,15 @@ func serveWs(hub *Hub) http.HandlerFunc {
 
 		client := &Client{hub: hub, conn: conn}
 
-		hub.add(client)
-		defer hub.remove(client)
+		hub.register <- client
+		defer func() { hub.unregister <- client }()
 
 		for {
 			messageType, data, err := conn.ReadMessage()
 			if err != nil {
 				break
 			}
-			hub.broadcast(client, messageType, data)
+			hub.broadcastCh <- outboundMessage{sender: client, messageType: messageType, data: data}
 		}
 	}
 }

@@ -69,6 +69,7 @@ func serveIndex(w http.ResponseWriter, r *http.Request) {
 
 func main() {
 	hub := newHub()
+	go hub.run()
 
 	http.HandleFunc("/", serveIndex)
 	http.HandleFunc("/ws", serveWs(hub))
