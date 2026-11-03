@@ -35,6 +35,10 @@ func sanitizeIdentifier(value, fallback string) string {
 	return value
 }
 
+// Client wraps one WebSocket connection. Its send channel is the only way
+// the hub (or Client itself) delivers outbound bytes; readPump and
+// writePump each own one goroutine and never touch the connection
+// concurrently with each other.
 type Client struct {
 	hub      *Hub
 	conn     *websocket.Conn
@@ -44,6 +48,10 @@ type Client struct {
 	limiter  *TokenBucket
 }
 
+// writePump is the only goroutine that ever calls conn.WriteMessage. It
+// relays buffered outbound frames and sends a heartbeat ping every
+// pingPeriod, exiting (and closing the connection) on the first write
+// error or once send is closed.
 func (c *Client) writePump() {
 	ticker := time.NewTicker(pingPeriod)
 	defer func() {
@@ -71,6 +79,11 @@ func (c *Client) writePump() {
 	}
 }
 
+// readPump is the only goroutine that ever calls conn.ReadMessage. It
+// decodes, rate-limits, and dispatches each incoming frame, and always
+// ends by unregistering c from the hub -- on a read error, a closed
+// connection, or a missed pong deadline -- so no connection outlives its
+// goroutines.
 func (c *Client) readPump() {
 	defer func() { c.hub.unregister <- c }()
 
@@ -161,6 +174,9 @@ func (c *Client) sendError(body string) {
 	c.send <- encoded
 }
 
+// serveWs upgrades an HTTP request to a WebSocket, builds a Client for it
+// from the ?username=/?room= query params, and hands it to hub before
+// starting its read/write goroutines.
 func serveWs(hub *Hub, rateCapacity, ratePerSec float64) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		conn, err := upgrader.Upgrade(w, r, nil)

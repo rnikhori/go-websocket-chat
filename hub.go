@@ -13,6 +13,10 @@ type outboundMessage struct {
 	persist bool
 }
 
+// Hub owns all room membership, per-room history, and the roster. All of
+// its state is only ever touched from the single goroutine running run(),
+// which receives events over the register/unregister/broadcastCh channels;
+// nothing else should mutate a Hub's fields directly once run() has started.
 type Hub struct {
 	rooms       map[string]map[*Client]bool
 	history     map[string]*historyBuffer
@@ -42,6 +46,8 @@ func (h *Hub) historyFor(room string) *historyBuffer {
 	return b
 }
 
+// run is the hub's actor loop. It must be started exactly once (as a
+// goroutine) before any client registers, and never returns.
 func (h *Hub) run() {
 	for {
 		select {
@@ -58,6 +64,9 @@ func (h *Hub) run() {
 	}
 }
 
+// registerClient adds c to its room (creating the room if needed), replays
+// the room's history directly to c, then announces the join and an updated
+// roster to the whole room.
 func (h *Hub) registerClient(c *Client) {
 	room, ok := h.rooms[c.room]
 	if !ok {
@@ -108,6 +117,10 @@ func (h *Hub) rejectClient(c *Client) {
 	close(c.send)
 }
 
+// removeClient takes c out of its room, closing its send channel so its
+// writePump (and in turn its connection) shuts down, then announces the
+// leave and an updated roster to whoever remains. It is safe to call for a
+// client that was already removed or never added; it is then a no-op.
 func (h *Hub) removeClient(c *Client) {
 	room, ok := h.rooms[c.room]
 	if !ok {
