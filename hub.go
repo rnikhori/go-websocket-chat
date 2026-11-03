@@ -1,5 +1,10 @@
 package main
 
+import (
+	"log"
+	"time"
+)
+
 type outboundMessage struct {
 	sender *Client
 	data   []byte
@@ -25,18 +30,35 @@ func (h *Hub) run() {
 	for {
 		select {
 		case c := <-h.register:
-			room, ok := h.rooms[c.room]
-			if !ok {
-				room = make(map[*Client]bool)
-				h.rooms[c.room] = room
-			}
-			room[c] = true
+			h.registerClient(c)
 		case c := <-h.unregister:
 			h.removeClient(c)
 		case m := <-h.broadcastCh:
 			h.broadcastToRoom(m.sender.room, m.sender, m.data)
 		}
 	}
+}
+
+func (h *Hub) registerClient(c *Client) {
+	room, ok := h.rooms[c.room]
+	if !ok {
+		room = make(map[*Client]bool)
+		h.rooms[c.room] = room
+	}
+	room[c] = true
+
+	notice := Message{
+		Type:      MessageTypeJoin,
+		Room:      c.room,
+		Username:  c.username,
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+	}
+	encoded, err := notice.Encode()
+	if err != nil {
+		log.Printf("encode error: %v", err)
+		return
+	}
+	h.broadcastToAll(c.room, encoded)
 }
 
 func (h *Hub) removeClient(c *Client) {
@@ -63,6 +85,16 @@ func (h *Hub) broadcastToRoom(roomName string, sender *Client, data []byte) {
 		if c == sender {
 			continue
 		}
+		c.send <- data
+	}
+}
+
+func (h *Hub) broadcastToAll(roomName string, data []byte) {
+	room, ok := h.rooms[roomName]
+	if !ok {
+		return
+	}
+	for c := range room {
 		c.send <- data
 	}
 }
