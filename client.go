@@ -57,6 +57,13 @@ func (c *Client) writePump() {
 
 func (c *Client) readPump() {
 	defer func() { c.hub.unregister <- c }()
+
+	c.conn.SetReadDeadline(time.Now().Add(pongWait))
+	c.conn.SetPongHandler(func(string) error {
+		c.conn.SetReadDeadline(time.Now().Add(pongWait))
+		return nil
+	})
+
 	for {
 		_, data, err := c.conn.ReadMessage()
 		if err != nil {
